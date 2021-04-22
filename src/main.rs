@@ -19,15 +19,14 @@ fn efi_main(handle: Handle, system_table: SystemTable<Boot>) -> Status {
 
 fn init_gop(boot_services: &BootServices) {
     if let Ok(gopp) = boot_services.locate_protocol::<GraphicsOutput>() {
-        let mut gop = unsafe { gopp.unwrap().get().as_mut() }.unwrap();
+        let gop = unsafe { gopp.unwrap().get().as_mut() }.unwrap();
         info!("Show Available Resolutions:");
-        let mut usedMode = None;
+        let mut selected_mode = None;
         let mut score = i32::MIN;
         for mode in gop.modes() {
-            let inf = mode.unwrap();
-            let inff = inf.info();
-            let (width, height) = inff.resolution();
-            let currentScore = if width == 512 && height == 384 {
+            let mode = mode.unwrap();
+            let (width, height) = mode.info().resolution();
+            let current_score = if width == 512 && height == 384 {
                 i32::MAX
             } else if (width % 512 == 0 && height % 384 == 0) && ((width / 512) == (height / 384)) {
                 i32::MAX - (width/512) as i32
@@ -36,16 +35,16 @@ fn init_gop(boot_services: &BootServices) {
             } else {
                 -((width * height) as i32)
             };
-            info!("{} x {} (Score: {})", width, height, currentScore);
+            info!("{} x {} (Score: {})", width, height, current_score);
             if width < 512 || height < 384 {
                 continue;
             }
-            if score < currentScore {
-                score = currentScore;
-                usedMode = Some(inf);
+            if score < current_score {
+                score = current_score;
+                selected_mode = Some(mode);
             }
         }
-        if let Some(mode) = usedMode {
+        if let Some(mode) = selected_mode {
             let (width, height) = mode.info().resolution();
             info!("Choiced: {} x {} (Score: {})", width, height, score);
             gop.set_mode(&mode).expect("failed to set mode").expect("failed to set mode");

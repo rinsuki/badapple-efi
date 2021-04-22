@@ -10,6 +10,10 @@ use uefi::proto::console::gop::{GraphicsOutput, BltOp, BltPixel};
 use uefi::ResultExt;
 use uefi::table::boot::{EventType, TimerTrigger, Tpl};
 
+const WIDTH: usize = 512;
+const HEIGHT: usize = 384;
+const FPS: u64 = 30;
+
 #[entry]
 fn efi_main(handle: Handle, system_table: SystemTable<Boot>) -> Status {
     uefi_services::init(&system_table).expect_success("Failed to initialize");
@@ -23,17 +27,17 @@ fn efi_main(handle: Handle, system_table: SystemTable<Boot>) -> Status {
     // INIT GOP
     let gop = init_gop(boot_services);
     let current_size = gop.current_mode_info().resolution();
-    let base = ((current_size.0 / 2) - (512/2), (current_size.1 / 2)-(384/2));
+    let base = ((current_size.0 / 2) - (WIDTH/2), (current_size.1 / 2)-(HEIGHT/2));
     // MAIN
     let mut i = 0;
-    boot_services.set_timer(timer_event, TimerTrigger::Relative(1_000_000 / 60)).unwrap().unwrap();
+    boot_services.set_timer(timer_event, TimerTrigger::Relative(1_000_000 / FPS)).unwrap().unwrap();
     loop {
         // logic
         i = if i == 255 { 0 } else { i + 1 };
         // actual draw
         // TODO: use vsync (if exists in UEFI)
         boot_services.wait_for_event(&mut timer_events).unwrap().unwrap();
-        boot_services.set_timer(timer_event, TimerTrigger::Relative(1_000_000 / 60)).unwrap().unwrap();
+        boot_services.set_timer(timer_event, TimerTrigger::Relative(1_000_000 / FPS)).unwrap().unwrap();
         gop.blt(BltOp::VideoFill{
             color: BltPixel::new(
                 i,
@@ -41,7 +45,7 @@ fn efi_main(handle: Handle, system_table: SystemTable<Boot>) -> Status {
                 0xD9,
             ),
             dest: base,
-            dims: (512, 384),
+            dims: (WIDTH, HEIGHT),
         }).unwrap_success();
     }
     Status::SUCCESS
@@ -56,7 +60,7 @@ fn init_gop(boot_services: &BootServices) -> &mut GraphicsOutput {
         for mode in gop.modes() {
             let mode = mode.unwrap();
             let (width, height) = mode.info().resolution();
-            let current_score = if width == 512 && height == 384 {
+            let current_score = if width == WIDTH && height == HEIGHT {
                 i32::MAX
             } else if (width % 4 == 0 && height % 3 == 0) && ((width / 4) == (width / 3)) {
                 (i32::MAX / 2) - (width/4) as i32
@@ -64,7 +68,7 @@ fn init_gop(boot_services: &BootServices) -> &mut GraphicsOutput {
                 -((width * height) as i32)
             };
             info!("{} x {} (Score: {})", width, height, current_score);
-            if width < 512 || height < 384 {
+            if width < WIDTH || height < HEIGHT {
                 continue;
             }
             if score < current_score {

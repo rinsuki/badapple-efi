@@ -8,24 +8,42 @@ extern crate log;
 use uefi::prelude::*;
 use uefi::proto::console::gop::{GraphicsOutput, BltOp, BltPixel};
 use uefi::ResultExt;
+use uefi::table::boot::{EventType, TimerTrigger, Tpl};
 
 #[entry]
 fn efi_main(handle: Handle, system_table: SystemTable<Boot>) -> Status {
     uefi_services::init(&system_table).expect_success("Failed to initialize");
     info!("Hello, world!");
-    let gop = init_gop(system_table.boot_services());
+    let boot_services = system_table.boot_services();
+    // INIT TIMER
+    let timer_event = unsafe { boot_services.create_event(
+        EventType::TIMER, Tpl::APPLICATION, None
+    ) }.unwrap().unwrap();
+    let mut timer_events = [timer_event];
+    // INIT GOP
+    let gop = init_gop(boot_services);
     let current_size = gop.current_mode_info().resolution();
     let base = ((current_size.0 / 2) - (512/2), (current_size.1 / 2)-(384/2));
-    gop.blt(BltOp::VideoFill{
-        color: BltPixel::new(
-            0x00,
-            0x95,
-            0xD9,
-        ),
-        dest: base,
-        dims: (512, 384),
-    }).unwrap_success();
-    loop {}
+    // MAIN
+    let mut i = 0;
+    boot_services.set_timer(timer_event, TimerTrigger::Relative(1_000_000 / 60)).unwrap().unwrap();
+    loop {
+        // logic
+        i = if i == 255 { 0 } else { i + 1 };
+        // actual draw
+        // TODO: use vsync (if exists in UEFI)
+        boot_services.wait_for_event(&mut timer_events).unwrap().unwrap();
+        boot_services.set_timer(timer_event, TimerTrigger::Relative(1_000_000 / 60)).unwrap().unwrap();
+        gop.blt(BltOp::VideoFill{
+            color: BltPixel::new(
+                i,
+                0x95,
+                0xD9,
+            ),
+            dest: base,
+            dims: (512, 384),
+        }).unwrap_success();
+    }
     Status::SUCCESS
 }
 

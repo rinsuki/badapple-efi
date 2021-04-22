@@ -6,18 +6,30 @@
 extern crate log;
 
 use uefi::prelude::*;
-use uefi::proto::console::gop::GraphicsOutput;
+use uefi::proto::console::gop::{GraphicsOutput, BltOp, BltPixel};
 use uefi::ResultExt;
 
 #[entry]
 fn efi_main(handle: Handle, system_table: SystemTable<Boot>) -> Status {
     uefi_services::init(&system_table).expect_success("Failed to initialize");
     info!("Hello, world!");
-    init_gop(system_table.boot_services());
+    let gop = init_gop(system_table.boot_services());
+    let current_size = gop.current_mode_info().resolution();
+    let base = ((current_size.0 / 2) - (512/2), (current_size.1 / 2)-(384/2));
+    gop.blt(BltOp::VideoFill{
+        color: BltPixel::new(
+            0x00,
+            0x95,
+            0xD9,
+        ),
+        dest: base,
+        dims: (512, 384),
+    }).unwrap_success();
+    loop {}
     Status::SUCCESS
 }
 
-fn init_gop(boot_services: &BootServices) {
+fn init_gop(boot_services: &BootServices) -> &mut GraphicsOutput {
     if let Ok(gopp) = boot_services.locate_protocol::<GraphicsOutput>() {
         let gop = unsafe { gopp.unwrap().get().as_mut() }.unwrap();
         info!("Show Available Resolutions:");
@@ -28,8 +40,6 @@ fn init_gop(boot_services: &BootServices) {
             let (width, height) = mode.info().resolution();
             let current_score = if width == 512 && height == 384 {
                 i32::MAX
-            } else if (width % 512 == 0 && height % 384 == 0) && ((width / 512) == (height / 384)) {
-                i32::MAX - (width/512) as i32
             } else if (width % 4 == 0 && height % 3 == 0) && ((width / 4) == (width / 3)) {
                 (i32::MAX / 2) - (width/4) as i32
             } else {
@@ -49,7 +59,7 @@ fn init_gop(boot_services: &BootServices) {
             info!("Choiced: {} x {} (Score: {})", width, height, score);
             gop.set_mode(&mode).expect("failed to set mode").expect("failed to set mode");
         }
-        return;
+        return gop;
     }
     panic!("Failed to Initialize GOP (or unavailable)");
 }

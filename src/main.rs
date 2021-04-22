@@ -62,7 +62,7 @@ fn init_gop(boot_services: &BootServices) -> &mut GraphicsOutput {
             let (width, height) = mode.info().resolution();
             let current_score = if width == WIDTH && height == HEIGHT {
                 i32::MAX
-            } else if (width % 4 == 0 && height % 3 == 0) && ((width / 4) == (width / 3)) {
+            } else if (width % 4 == 0 && height % 3 == 0) && ((width / 4) == (height / 3)) {
                 (i32::MAX / 2) - (width/4) as i32
             } else {
                 -((width * height) as i32)

@@ -1,3 +1,5 @@
 /target
 OVMF.fd
 esp
+/encoder/*/*.*
+!/encoder/*/.gitkeep
